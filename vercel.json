@@ -1,10 +1,13 @@
 {
   "version": 2,
   "rewrites": [
-    { "source": "/(.*)", "destination": "/server.js" }
+    { "source": "/api/(.*)", "destination": "/api" },
+    { "source": "/verify/(.*)", "destination": "/api" },
+    { "source": "/H.jpg", "destination": "/api" },
+    { "source": "/favicon.ico", "destination": "/api" }
   ],
   "functions": {
-    "server.js": {
+    "api/index.js": {
       "includeFiles": "scripts/**,public/**"
     }
   }
