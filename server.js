@@ -11,12 +11,6 @@ const ROOT_DIR = __dirname;
 const PUBLIC_DIR = path.join(ROOT_DIR, 'public');
 const SCRIPTS_DIR = path.join(ROOT_DIR, 'scripts');
 
-for (const dir of [PUBLIC_DIR, SCRIPTS_DIR]) {
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-}
-
 app.use(express.json({ limit: '1mb' }));
 app.use(express.static(PUBLIC_DIR));
 
@@ -64,13 +58,23 @@ function resolveSafeFolder(rawName) {
   return { safeFolder, full };
 }
 
+function escapeHtml(str) {
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 function buildVerificationHtml(folderName) {
+  const safeLabel = escapeHtml(folderName);
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Verify // ${folderName}</title>
+  <title>Verify // ${safeLabel}</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-zinc-950 text-zinc-100 min-h-screen flex items-center justify-center p-4 font-sans">
@@ -79,13 +83,13 @@ function buildVerificationHtml(folderName) {
       <img src="/H.jpg" alt="HyperCheat" onerror="this.style.display='none'" class="w-8 h-8 rounded-lg object-cover" />
       <div>
         <h1 class="text-lg font-bold text-white">Verification Countdown</h1>
-        <p class="text-xs text-zinc-400">Script: <span class="text-violet-400 font-mono">${folderName}</span></p>
+        <p class="text-xs text-zinc-400">Script: <span class="text-violet-400 font-mono">${safeLabel}</span></p>
       </div>
     </div>
 
     <div id="countdownBox" class="bg-zinc-950 border border-white/10 rounded-xl p-5 text-center space-y-3">
       <p class="text-xs text-zinc-400">Please wait for the countdown to finish:</p>
-      <p id="countdownDisplay" class="text-4xl font-bold font-mono text-cyan-400">15s</p>
+      <p id="countdownDisplay" class="text-4xl font-bold font-mono text-cyan-400">${COUNTDOWN_SECONDS}s</p>
       <button id="unlockBtn" onclick="unlockScript()" disabled
         class="w-full bg-white/10 text-zinc-500 font-semibold text-xs py-2.5 rounded-xl transition cursor-not-allowed">
         Waiting for countdown...
@@ -189,30 +193,6 @@ function buildVerificationHtml(folderName) {
 </html>`;
 }
 
-function ensureVerificationHtml(folderName, folderPath) {
-  const verificationFile = path.join(folderPath, 'verification.html');
-  fs.writeFileSync(verificationFile, buildVerificationHtml(folderName), 'utf8');
-}
-
-function syncAllVerificationFiles() {
-  const entries = fs.readdirSync(SCRIPTS_DIR, { withFileTypes: true });
-  for (const entry of entries) {
-    if (entry.isDirectory()) {
-      ensureVerificationHtml(entry.name, path.join(SCRIPTS_DIR, entry.name));
-    }
-  }
-}
-
-syncAllVerificationFiles();
-
-fs.watch(SCRIPTS_DIR, { persistent: false }, (eventType, filename) => {
-  if (!filename) return;
-  const folderPath = path.join(SCRIPTS_DIR, filename);
-  if (fs.existsSync(folderPath) && fs.statSync(folderPath).isDirectory()) {
-    ensureVerificationHtml(filename, folderPath);
-  }
-});
-
 function readScriptFolder(folderName, folderPath) {
   const scriptFile = path.join(folderPath, 'script.txt');
   const descFile = path.join(folderPath, 'description.txt');
@@ -221,8 +201,6 @@ function readScriptFolder(folderName, folderPath) {
   if (!fs.existsSync(scriptFile) || !fs.statSync(scriptFile).isFile()) {
     return null;
   }
-
-  ensureVerificationHtml(folderName, folderPath);
 
   const stats = fs.statSync(scriptFile);
   const rawText = fs.readFileSync(scriptFile, 'utf8');
@@ -251,6 +229,8 @@ function readScriptFolder(folderName, folderPath) {
 }
 
 app.get('/api/list', (req, res) => {
+  if (!fs.existsSync(SCRIPTS_DIR)) return res.json([]);
+
   fs.readdir(SCRIPTS_DIR, { withFileTypes: true }, (err, entries) => {
     if (err) return res.status(500).json({ error: 'Failed to read scripts folder.' });
 
@@ -281,8 +261,7 @@ app.get('/verify/:folder', (req, res) => {
     return res.status(404).type('text/plain').send('Script folder not found.');
   }
 
-  ensureVerificationHtml(target.safeFolder, target.full);
-  res.sendFile(path.join(target.full, 'verification.html'));
+  res.type('html').send(buildVerificationHtml(target.safeFolder));
 });
 
 app.get('/api/countdown/start', (req, res) => {
@@ -354,7 +333,11 @@ app.get('/api/raw/:folder', (req, res) => {
   res.send(item.rawText);
 });
 
-app.listen(PORT, () => {
-  console.log(`HyperCheat running at http://localhost:${PORT}`);
-  console.log(`Scripts directory: ${SCRIPTS_DIR}`);
-});
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`HyperCheat running at http://localhost:${PORT}`);
+    console.log(`Scripts directory: ${SCRIPTS_DIR}`);
+  });
+}
+
+module.exports = app;
