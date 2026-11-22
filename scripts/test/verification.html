@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Verify // test</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen flex items-center justify-center p-4 font-sans">
+  <div class="max-w-md w-full bg-zinc-900 border border-white/10 rounded-2xl p-6 shadow-2xl">
+    <div class="flex items-center gap-3 mb-4">
+      <img src="/H.jpg" alt="HyperCheat" onerror="this.style.display='none'" class="w-8 h-8 rounded-lg object-cover" />
+      <div>
+        <h1 class="text-lg font-bold text-white">Verification Countdown</h1>
+        <p class="text-xs text-zinc-400">Script: <span class="text-violet-400 font-mono">test</span></p>
+      </div>
+    </div>
+
+    <div id="countdownBox" class="bg-zinc-950 border border-white/10 rounded-xl p-5 text-center space-y-3">
+      <p class="text-xs text-zinc-400">Please wait for the countdown to finish:</p>
+      <p id="countdownDisplay" class="text-4xl font-bold font-mono text-cyan-400">15s</p>
+      <button id="unlockBtn" onclick="unlockScript()" disabled
+        class="w-full bg-white/10 text-zinc-500 font-semibold text-xs py-2.5 rounded-xl transition cursor-not-allowed">
+        Waiting for countdown...
+      </button>
+    </div>
+
+    <p id="statusMsg" class="text-xs text-red-400 mt-3 hidden"></p>
+
+    <div id="unlockedBox" class="hidden mt-5 pt-4 border-t border-white/10 space-y-3">
+      <div class="flex items-center justify-between">
+        <span class="text-xs font-mono px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+          LOADSTRING READY
+        </span>
+        <button id="copyBtn" onclick="copyLoadstring()"
+          class="text-xs bg-white/10 hover:bg-white/20 px-3 py-1 rounded-lg text-white">
+          Copy Loadstring
+        </button>
+      </div>
+
+      <pre id="loadstringOutput" class="p-3 rounded-xl bg-zinc-950 border border-white/10 text-xs font-mono text-cyan-300 overflow-x-auto whitespace-pre-wrap break-all"></pre>
+
+      <button onclick="toggleRaw()"
+        class="w-full bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-200 text-xs font-medium py-2 rounded-xl transition">
+        Show / Hide Raw Text
+      </button>
+
+      <pre id="rawOutput" class="hidden p-3 rounded-xl bg-zinc-950 border border-white/10 text-xs font-mono text-zinc-300 overflow-x-auto max-h-52 whitespace-pre-wrap break-all"></pre>
+    </div>
+  </div>
+
+  <script>
+    const folder = "test";
+    let sessionId = '';
+    let secondsLeft = 15;
+    let finished = false;
+    let loadstringText = '';
+
+    async function startCountdown() {
+      const res = await fetch('/api/countdown/start?folder=' + encodeURIComponent(folder));
+      const data = await res.json();
+      sessionId = data.sessionId;
+      secondsLeft = data.seconds || 15;
+      document.getElementById('countdownDisplay').textContent = secondsLeft + 's';
+
+      const btn = document.getElementById('unlockBtn');
+      const timer = setInterval(() => {
+        secondsLeft -= 1;
+        if (secondsLeft > 0) {
+          document.getElementById('countdownDisplay').textContent = secondsLeft + 's';
+        } else {
+          clearInterval(timer);
+          finished = true;
+          document.getElementById('countdownDisplay').textContent = '0s';
+          btn.disabled = false;
+          btn.className = 'w-full bg-gradient-to-r from-violet-600 to-cyan-600 hover:opacity-90 text-white font-semibold text-xs py-2.5 rounded-xl transition cursor-pointer';
+          btn.textContent = 'Get Loadstring';
+        }
+      }, 1000);
+    }
+
+    async function unlockScript() {
+      if (!finished) return;
+      const statusMsg = document.getElementById('statusMsg');
+      statusMsg.classList.add('hidden');
+
+      const res = await fetch('/api/countdown/complete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId, folder })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        statusMsg.textContent = data.error || 'Countdown not finished yet.';
+        statusMsg.classList.remove('hidden');
+        return;
+      }
+
+      const fullRawUrl = window.location.origin + data.rawEndpoint;
+      loadstringText = 'loadstring(game:HttpGet("' + fullRawUrl + '"))()';
+
+      document.getElementById('countdownBox').classList.add('hidden');
+      document.getElementById('unlockedBox').classList.remove('hidden');
+      document.getElementById('loadstringOutput').textContent = loadstringText;
+      document.getElementById('rawOutput').textContent = data.rawText;
+    }
+
+    function copyLoadstring() {
+      if (!loadstringText) return;
+      navigator.clipboard.writeText(loadstringText);
+      document.getElementById('copyBtn').textContent = 'Copied!';
+    }
+
+    function toggleRaw() {
+      document.getElementById('rawOutput').classList.toggle('hidden');
+    }
+
+    startCountdown();
+  </script>
+</body>
+</html>
