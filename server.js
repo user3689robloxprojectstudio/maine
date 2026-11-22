@@ -7,9 +7,35 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const COUNTDOWN_SECONDS = 15;
 
+function resolveScriptsDir() {
+  const candidates = [
+    path.join(__dirname, 'scripts'),
+    path.join(process.cwd(), 'scripts')
+  ];
+  for (const dir of candidates) {
+    if (fs.existsSync(dir) && fs.statSync(dir).isDirectory()) {
+      return dir;
+    }
+  }
+  return candidates[0];
+}
+
+function resolvePublicDir() {
+  const candidates = [
+    path.join(__dirname, 'public'),
+    path.join(process.cwd(), 'public')
+  ];
+  for (const dir of candidates) {
+    if (fs.existsSync(dir) && fs.statSync(dir).isDirectory()) {
+      return dir;
+    }
+  }
+  return candidates[0];
+}
+
 const ROOT_DIR = __dirname;
-const PUBLIC_DIR = path.join(ROOT_DIR, 'public');
-const SCRIPTS_DIR = path.join(ROOT_DIR, 'scripts');
+const PUBLIC_DIR = resolvePublicDir();
+const SCRIPTS_DIR = resolveScriptsDir();
 
 app.use(express.json({ limit: '1mb' }));
 app.use(express.static(PUBLIC_DIR));
@@ -27,17 +53,40 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000);
 
+function sendLogoOr204(res) {
+  const candidates = [
+    path.join(PUBLIC_DIR, 'H.jpg'),
+    path.join(ROOT_DIR, 'H.jpg'),
+    path.join(process.cwd(), 'public', 'H.jpg'),
+    path.join(process.cwd(), 'H.jpg')
+  ];
+  for (const logoPath of candidates) {
+    if (fs.existsSync(logoPath) && fs.statSync(logoPath).isFile()) {
+      res.setHeader('Content-Type', 'image/jpeg');
+      return res.sendFile(logoPath);
+    }
+  }
+  return res.status(204).end();
+}
+
+app.get('/favicon.ico', (req, res) => {
+  return sendLogoOr204(res);
+});
+
 app.get('/H.jpg', (req, res) => {
-  const publicLogo = path.join(PUBLIC_DIR, 'H.jpg');
-  const rootLogo = path.join(ROOT_DIR, 'H.jpg');
-  if (fs.existsSync(publicLogo)) return res.sendFile(publicLogo);
-  if (fs.existsSync(rootLogo)) return res.sendFile(rootLogo);
-  return res.status(404).end();
+  return sendLogoOr204(res);
 });
 
 app.get('/', (req, res) => {
-  const publicIndex = path.join(PUBLIC_DIR, 'index.html');
-  if (fs.existsSync(publicIndex)) return res.sendFile(publicIndex);
+  const candidates = [
+    path.join(PUBLIC_DIR, 'index.html'),
+    path.join(process.cwd(), 'public', 'index.html')
+  ];
+  for (const indexPath of candidates) {
+    if (fs.existsSync(indexPath) && fs.statSync(indexPath).isFile()) {
+      return res.sendFile(indexPath);
+    }
+  }
   return res.status(404).type('text/plain').send('Missing public/index.html');
 });
 
